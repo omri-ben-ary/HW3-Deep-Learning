@@ -94,7 +94,26 @@ class Trainer(abc.ABC):
             #    simple regularization technique that is highly recommended.
             # ====== YOUR CODE: ======
             
-            raise NotImplementedError()
+            train_result = self.train_epoch(dl_train, verbose = verbose, **kw)
+            train_loss.extend(train_result.losses)
+            train_acc.append(train_result.accuracy)
+            
+            test_result = self.test_epoch(dl_test, verbose = verbose, **kw)
+            test_loss.extend(test_result.losses)
+            test_acc.append(test_result.accuracy)
+
+            actual_num_epochs+=1
+            if best_acc is None or test_result.accuracy > best_acc:
+                best_acc = test_result.accuracy
+                epochs_without_improvement = 0
+                if checkpoints:
+                    save_checkpoint = True
+
+            else:
+                epochs_without_improvement += 1
+                if early_stopping is not None and epochs_without_improvement >= early_stopping :
+                    print("early stopping")
+                    break
 
             # ========================
 
@@ -280,7 +299,12 @@ class RNNTrainer(Trainer):
             #  - Loss calculation
             #  - Calculate number of correct predictions
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            pred, hiden = self.model.forward(x, self.hidden_state)     
+            pred = torch.transpose(pred, 1, 2)
+            loss = self.loss_fn(pred, y)
+            
+            pred = torch.argmax(pred, dim=1)
+            num_correct = torch.sum(pred == y)
             # ========================
 
         return BatchResult(loss.item(), num_correct.item() / seq_len)
