@@ -37,7 +37,27 @@ def sliding_window_attention(q, k, v, window_size, padding_mask=None):
     ## Think how you can obtain the indices corresponding to the entries in the sliding windows using tensor operations (without loops),
     ## and then use these indices to compute the dot products directly.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    device = q.device
+    num_heads = 1
+    disatnce_window = window_size // 2
+    if len(q.shape) == 4:
+        num_heads = q.shape[1]
+
+    indices_q = torch.arange(seq_len).unsqueeze(1)
+    indices_k = torch.arange(seq_len).unsqueeze(0)
+    d = (torch.abs(indices_q - indices_k) <= disatnce_window).to(device)
+    k_t = k.transpose(-2,-1)
+    B = torch.where(d == 1, torch.matmul(q, k_t) / math.sqrt(embed_dim), torch.tensor(float('-9e15')).to(device)).to(device)
+
+    if padding_mask is not None:
+        mask_reshaped = padding_mask.unsqueeze(1).unsqueeze(-1)
+        multiplied_tensor = mask_reshaped * mask_reshaped.transpose(-1, -2)
+        expanded_multiplied_tensor = multiplied_tensor.expand(-1, num_heads, -1, -1)
+        B = torch.where(expanded_multiplied_tensor == 1, B, torch.tensor(float('-9e15')).to(device)).to(device)
+        #print("B=", B)
+
+    attention = torch.softmax(B, dim=-1)
+    values = torch.matmul(attention, v)
     # ========================
 
 
@@ -84,7 +104,7 @@ class MultiHeadAttention(nn.Module):
         # TODO:
         # call the sliding window attention function you implemented
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        values, attention = sliding_window_attention(q, k, v, self.window_size, padding_mask=padding_mask)
         # ========================
 
         values = values.permute(0, 2, 1, 3) # [Batch, SeqLen, Head, Dims]
@@ -166,7 +186,14 @@ class EncoderLayer(nn.Module):
         #   3) Apply a feed-forward layer to the output of step 2, and then apply dropout again.
         #   4) Add a second residual connection and normalize again.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        orig_x = x
+        x = self.self_attn.forward(x, padding_mask)
+        x = self.dropout(x)
+        x = self.norm1(x + orig_x)
+        tmp_x = x
+        x = self.feed_forward(x)
+        x = self.dropout(x)
+        x = self.norm2(x + tmp_x)
         # ========================
         
         return x

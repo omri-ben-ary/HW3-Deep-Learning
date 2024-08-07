@@ -29,11 +29,35 @@ def sliding_window_attention(q, k, v, window_size, padding_mask=None):
     #  Compute the sliding window attention.
     # NOTE: We will not test your implementation for efficiency, but you are required to follow these two rules:
     # 1) Implement the function without using for loops.
-    # 2) DON'T compute all dot products and then remove the uneccessary comptutations 
-    #    (both for tokens that aren't in the window, and for tokens that correspond to padding according to the 'padding mask').
+    # 2) DON'T compute all dot products and then remove the uneccessary comptutations
+    #    (You can compute the dot products for any entry, even if it corresponds to padding, as long as it is within the window).
     # Aside from these two rules, you are free to implement the function as you wish. 
+    ## HINT: There are several ways to implement this function, and while you are free to implement it however you may wish,
+    ## some are more intuitive than others. We suggest you to consider the following:
+    ## Think how you can obtain the indices corresponding to the entries in the sliding windows using tensor operations (without loops),
+    ## and then use these indices to compute the dot products directly.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    device = q.device
+    num_heads = 1
+    disatnce_window = window_size // 2
+    if len(q.shape) == 4:
+        num_heads = q.shape[1]
+
+    indices_q = torch.arange(seq_len).unsqueeze(1)
+    indices_k = torch.arange(seq_len).unsqueeze(0)
+    d = (torch.abs(indices_q - indices_k) <= disatnce_window).to(device)
+    k_t = k.transpose(-2,-1)
+    B = torch.where(d == 1, torch.matmul(q, k_t) / math.sqrt(embed_dim), torch.tensor(float('-9e15')).to(device)).to(device)
+
+    if padding_mask is not None:
+        mask_reshaped = padding_mask.unsqueeze(1).unsqueeze(-1)
+        multiplied_tensor = mask_reshaped * mask_reshaped.transpose(-1, -2)
+        expanded_multiplied_tensor = multiplied_tensor.expand(-1, num_heads, -1, -1)
+        B = torch.where(expanded_multiplied_tensor == 1, B, torch.tensor(float('-9e15')).to(device)).to(device)
+        #print("B=", B)
+
+    attention = torch.softmax(B, dim=-1)
+    values = torch.matmul(attention, v)
     # ========================
 
 
@@ -80,7 +104,7 @@ class MultiHeadAttention(nn.Module):
         # TODO:
         # call the sliding window attention function you implemented
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        values, attention = sliding_window_attention(q, k, v, self.window_size, padding_mask=padding_mask)
         # ========================
 
         values = values.permute(0, 2, 1, 3) # [Batch, SeqLen, Head, Dims]
@@ -162,7 +186,14 @@ class EncoderLayer(nn.Module):
         #   3) Apply a feed-forward layer to the output of step 2, and then apply dropout again.
         #   4) Add a second residual connection and normalize again.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        orig_x = x
+        x = self.self_attn.forward(x, padding_mask)
+        x = self.dropout(x)
+        x = self.norm1(x + orig_x)
+        tmp_x = x
+        x = self.feed_forward(x)
+        x = self.dropout(x)
+        x = self.norm2(x + tmp_x)
         # ========================
         
         return x
@@ -207,8 +238,9 @@ class Encoder(nn.Module):
         #  Implement the forward pass of the encoder.
         #  1) Apply the embedding layer to the input.
         #  2) Apply positional encoding to the output of step 1.
-        #  3) Apply the specified number of encoder layers.
-        #  4) Apply the classification MLP to the output vector corresponding to the special token [CLS] 
+        #  3) Apply a dropout layer to the output of the positional encoding.
+        #  4) Apply the specified number of encoder layers.
+        #  5) Apply the classification MLP to the output vector corresponding to the special token [CLS] 
         #     (always the first token) to receive the logits.
         # ====== YOUR CODE: ======
         raise NotImplementedError()
@@ -228,5 +260,4 @@ class Encoder(nn.Module):
         preds = torch.round(torch.sigmoid(logits))
         return preds
 
-    
     
