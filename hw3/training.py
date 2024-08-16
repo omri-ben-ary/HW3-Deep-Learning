@@ -94,7 +94,26 @@ class Trainer(abc.ABC):
             #    simple regularization technique that is highly recommended.
             # ====== YOUR CODE: ======
             
-            raise NotImplementedError()
+            train_result = self.train_epoch(dl_train, verbose = verbose, **kw)
+            train_loss.extend(train_result.losses)
+            train_acc.append(train_result.accuracy)
+            
+            test_result = self.test_epoch(dl_test, verbose = verbose, **kw)
+            test_loss.extend(test_result.losses)
+            test_acc.append(test_result.accuracy)
+
+            actual_num_epochs+=1
+            if best_acc is None or test_result.accuracy > best_acc:
+                best_acc = test_result.accuracy
+                epochs_without_improvement = 0
+                if checkpoints:
+                    save_checkpoint = True
+
+            else:
+                epochs_without_improvement += 1
+                if early_stopping is not None and epochs_without_improvement >= early_stopping :
+                    print("early stopping")
+                    break
 
             # ========================
 
@@ -280,7 +299,12 @@ class RNNTrainer(Trainer):
             #  - Loss calculation
             #  - Calculate number of correct predictions
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            pred, hiden = self.model.forward(x, self.hidden_state)     
+            pred = torch.transpose(pred, 1, 2)
+            loss = self.loss_fn(pred, y)
+            
+            pred = torch.argmax(pred, dim=1)
+            num_correct = torch.sum(pred == y)
             # ========================
 
         return BatchResult(loss.item(), num_correct.item() / seq_len)
@@ -323,7 +347,13 @@ class TransformerEncoderTrainer(Trainer):
         # TODO:
         #  fill out the training loop.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.optimizer.zero_grad()
+        out = self.model(input_ids, attention_mask).squeeze(-1)
+        loss = self.loss_fn(out, label)
+        loss.backward()
+        self.optimizer.step()
+        predictions = torch.round(torch.sigmoid(out))
+        num_correct = (predictions == label).sum()
         # ========================
         
         
@@ -342,7 +372,9 @@ class TransformerEncoderTrainer(Trainer):
             # TODO:
             #  fill out the testing loop.
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            out = self.model.forward(input_ids, attention_mask).squeeze(-1)
+            loss = self.loss_fn(out, label)
+            num_correct = (torch.round(torch.sigmoid(out)) == label).sum()
             # ========================
 
             
@@ -362,8 +394,20 @@ class FineTuningTrainer(Trainer):
         #  fill out the training loop.
         # ====== YOUR CODE: ======
 
-        raise NotImplementedError()
+        # Forward pass: compute the classifier output
+        classifier_output = self.model(input_ids, attention_masks, labels=labels)
+        loss = classifier_output.loss
+        logits = classifier_output.logits
         
+        # Backward pass and optimization step
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        
+        # Compute predictions and the number of correct predictions
+        pred = torch.argmax(logits, dim=-1)
+        num_correct = (pred == labels).sum()
+        loss = loss.item()
         # ========================
         
         return BatchResult(loss, num_correct)
@@ -378,6 +422,11 @@ class FineTuningTrainer(Trainer):
             # TODO:
             #  fill out the training loop.
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            # Forward pass: compute loss and logits
+            loss, logits = self.model(input_ids, attention_masks, labels=labels)[:2]
+            
+            # Compute predictions and the number of correct predictions
+            pred = logits.argmax(dim=-1)
+            num_correct = (pred == labels).sum()
             # ========================
         return BatchResult(loss, num_correct)
