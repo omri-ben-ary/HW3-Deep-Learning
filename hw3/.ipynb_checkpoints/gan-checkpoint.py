@@ -226,7 +226,7 @@ def train_batch(
     fake_preds = dsc_model(fake_data.detach())
     real_labels = torch.ones(x_data.size(0), device=x_data.device)
     fake_labels = torch.zeros(x_data.size(0), device=x_data.device)
-    dsc_loss = dsc_loss_fn(real_preds, fake_preds)
+    dsc_loss = dsc_loss_fn(real_preds, fake_preds, data_label=1, label_noise=0.1)
     dsc_loss.backward()
     dsc_optimizer.step()
     # ========================
@@ -238,7 +238,7 @@ def train_batch(
     # ====== YOUR CODE: ======
     gen_optimizer.zero_grad()
     fake_preds = dsc_model(fake_data)
-    gen_loss = gen_loss_fn(fake_preds)  # Generator wants discriminator to classify as real
+    gen_loss = gen_loss_fn(fake_preds, data_label=1)  # Generator wants discriminator to classify as real
     gen_loss.backward()
     gen_optimizer.step()
     # ========================
@@ -263,11 +263,9 @@ def save_checkpoint(gen_model, dsc_losses, gen_losses, checkpoint_file):
     #  You should decide what logic to use for deciding when to save.
     #  If you save, set saved to True.
     # ====== YOUR CODE: ======
+    raise NotImplementedError()
     # ========================
-    if len(gen_losses) > 1 and gen_losses[-1] < min(gen_losses[:-1]):
-        # Check if discriminator loss is stable or improving
-        if len(dsc_losses) > 1 and dsc_losses[-1] < min(dsc_losses[:-1]):
-            torch.save(gen_model.state_dict(), checkpoint_file)
-            print(f"*** Saved checkpoint {checkpoint_file} ")
-            saved = True
+    torch.save(gen_model, checkpoint_file)
+    print(f"*** Saved checkpoint {checkpoint_file} ")
+    saved = True
     return saved
